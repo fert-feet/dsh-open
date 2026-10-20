@@ -32,7 +32,9 @@
   ],
   "scripts": {
     "build:client": "node scripts/build-client.mjs",
-    "test": "node scripts/build-client.mjs --check && node --test \"test/**/*.test.mjs\""
+    "test": "node scripts/build-client.mjs --check && node --test \"test/**/*.test.mjs\"",
+    "e2e": "node scripts/e2e.mjs",
+    "install:desktop": "node scripts/install.mjs"
   },
   "engines": {
     "node": ">=22"
