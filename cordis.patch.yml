@@ -1,7 +1,7 @@
-# dsh-app bundle layer: mounts the host half in every profile that lists
-# `dsh-app` in dsh.profile.bundles (or depends on it). The browser half needs
+# dsh-open bundle layer: mounts the host half in every profile that lists
+# `dsh-open` in dsh.profile.bundles (or depends on it). The browser half needs
 # no row here: the client module system composes it from the package's
 # `dsh.client` declaration once this host row is active.
 - insert:
-    - id: dsh-app
-      name: dsh-app
+    - id: dsh-open
+      name: dsh-open

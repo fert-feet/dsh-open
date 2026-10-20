@@ -3,10 +3,10 @@
  * End-to-end check against a real dsh host (no Electron, no browser).
  *
  * Boots the DeepSeek Harness bundled CLI as a web host with a throwaway DSH_HOME
- * whose `web` profile bundles dsh-app, then exercises the whole chain:
+ * whose `web` profile bundles dsh-open, then exercises the whole chain:
  *
- *   dsh-app <dir>  →  request.json  →  host watcher  →  GET /dsh-app/pending
- *   →  (simulated browser ack)  →  POST /dsh-app/ack  →  CLI exit 0
+ *   dsh-open <dir>  →  request.json  →  host watcher  →  GET /dsh-open/pending
+ *   →  (simulated browser ack)  →  POST /dsh-open/ack  →  CLI exit 0
  *
  * It also asserts that the host composed the browser half into the boot payload
  * and that host.json disappears when the host shuts down.
@@ -19,7 +19,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 const REPO = new URL("..", import.meta.url).pathname;
 const CLI = "/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh";
-const APP_CLI = join(REPO, "bin", "dsh-app.js");
+const APP_CLI = join(REPO, "bin", "dsh-open.js");
 const BOOT_TIMEOUT_MS = 60000;
 
 /**
@@ -49,11 +49,11 @@ async function waitFor(check, timeoutMs, label) {
 }
 
 /**
- * Create a throwaway DSH_HOME whose web profile bundles dsh-app.
+ * Create a throwaway DSH_HOME whose web profile bundles dsh-open.
  * @returns paths for the run.
  */
 function fixture() {
-	const root = mkdtempSync(join(tmpdir(), "dsh-app-e2e-"));
+	const root = mkdtempSync(join(tmpdir(), "dsh-open-e2e-"));
 	const home = join(root, "home");
 	const profile = join(home, "profiles", "web");
 	const project = join(root, "project");
@@ -65,15 +65,15 @@ function fixture() {
 			{
 				name: "dsh-profile-web",
 				private: true,
-				dependencies: { "dsh-app": `file:${REPO}` },
-				dsh: { profile: { bundles: ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "dsh-app"] } },
+				dependencies: { "dsh-open": `file:${REPO}` },
+				dsh: { profile: { bundles: ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "dsh-open"] } },
 			},
 			null,
 			2,
 		)}\n`,
 	);
-	symlinkSync(REPO, join(profile, "node_modules", "dsh-app"), "dir");
-	return { root, home, project, run: join(home, "run", "dsh-app") };
+	symlinkSync(REPO, join(profile, "node_modules", "dsh-open"), "dir");
+	return { root, home, project, run: join(home, "run", "dsh-open") };
 }
 
 /**
@@ -131,7 +131,7 @@ try {
 	const token = new URL(url).searchParams.get("token");
 
 	await waitFor(() => existsSync(join(fixturePaths.run, "host.json")), 30000, "host.json");
-	const health = await api(base, token, "/dsh-app/health");
+	const health = await api(base, token, "/dsh-open/health");
 	if (health.ok !== true || health.pending !== null) throw new Error(`unexpected health: ${JSON.stringify(health)}`);
 
 	// The browser half must be part of the boot payload served to the window.
@@ -142,7 +142,7 @@ try {
 		.map((cookie) => cookie.split(";")[0])
 		.filter((cookie) => cookie !== "");
 	const page = await fetch(url, { headers: { accept: "text/html", cookie: cookies.join("; ") } }).then((response) => response.text());
-	if (!page.includes('"id":"dsh-app"')) throw new Error("the boot payload does not list the dsh-app client module");
+	if (!page.includes('"id":"dsh-open"')) throw new Error("the boot payload does not list the dsh-open client module");
 
 	// Run the CLI in the background, then play the browser's part.
 	const cli = spawn(process.execPath, [APP_CLI, fixturePaths.project, "--timeout", "25000"], {
@@ -156,22 +156,22 @@ try {
 
 	const pending = await waitFor(
 		async () => {
-			const body = await api(base, token, "/dsh-app/pending");
+			const body = await api(base, token, "/dsh-open/pending");
 			return typeof body.path === "string" ? body : undefined;
 		},
 		15000,
 		"the host to queue the request",
 	);
 	if (pending.path !== fixturePaths.project) throw new Error(`queued ${pending.path}, expected ${fixturePaths.project}`);
-	await api(base, token, "/dsh-app/ack", {
+	await api(base, token, "/dsh-open/ack", {
 		method: "POST",
 		headers: { "content-type": "application/json" },
 		body: JSON.stringify({ nonce: pending.nonce, workspaceId: "ws-e2e" }),
 	});
 	const code = await cliExit;
-	if (code !== 0) throw new Error(`dsh-app exited ${String(code)}: ${cliErr.trim()}`);
+	if (code !== 0) throw new Error(`dsh-open exited ${String(code)}: ${cliErr.trim()}`);
 	if (!cliOut.includes(`opened ${fixturePaths.project}`)) throw new Error(`unexpected CLI output: ${cliOut.trim()}`);
-	const after = await api(base, token, "/dsh-app/pending");
+	const after = await api(base, token, "/dsh-open/pending");
 	if (after.path !== null) throw new Error("the host kept the request after it was acked");
 
 	host.child.kill("SIGTERM");

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Install dsh-app into the DeepSeek Harness desktop profile.
+ * Install dsh-open into the DeepSeek Harness desktop profile.
  *
  * The desktop profile lives under `$DSH_HOME/profiles/desktop` and is owned by
  * the app, so the installer edits exactly three things and nothing else:
  *
  *   package.json        dependency entry + `dsh.profile.bundles` membership
  *   cordis.patch.yml    the `insert` row that mounts the host half
- *   node_modules/dsh-app  a symlink to this repository
+ *   node_modules/dsh-open  a symlink to this repository
  *
  * Every file is backed up before the first edit and restored if any later step
  * throws. The app loads profile bundles at boot, so a restart is needed; the
@@ -17,8 +17,8 @@ import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, renameSyn
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-const PACKAGE_NAME = "dsh-app";
-const ROW_ID = "dsh-app";
+const PACKAGE_NAME = "dsh-open";
+const ROW_ID = "dsh-open";
 const REPO = resolve(dirname(new URL(import.meta.url).pathname), "..");
 
 /**
@@ -93,8 +93,8 @@ function install(profile) {
 		}
 	};
 
-	backup(packageFile, `${packageFile}.dsh-app-${stamp}.bak`);
-	backup(patchFile, `${patchFile}.dsh-app-${stamp}.bak`);
+	backup(packageFile, `${packageFile}.dsh-open-${stamp}.bak`);
+	backup(patchFile, `${patchFile}.dsh-open-${stamp}.bak`);
 
 	try {
 		const manifest = readJson(packageFile);
@@ -107,14 +107,14 @@ function install(profile) {
 		writeJson(packageFile, manifest);
 
 		let patch = existsSync(patchFile) ? readFileSync(patchFile, "utf8") : "";
-		if (!/^\s*-?\s*name:\s*["']?dsh-app["']?\s*$/m.test(patch)) {
+		if (!/^\s*-?\s*name:\s*["']?dsh-open["']?\s*$/m.test(patch)) {
 			patch = `${patch.trimEnd()}\n- insert:\n    - id: ${ROW_ID}\n      name: ${PACKAGE_NAME}\n`;
 			writeFileSync(patchFile, patch);
 		}
 
 		mkdirSync(modules, { recursive: true });
 		if (existsSync(link) || isSymlink(link)) {
-			const previous = `${link}.dsh-app-backup-${stamp}`;
+			const previous = `${link}.dsh-open-backup-${stamp}`;
 			if (isSymlink(link)) unlinkSync(link);
 			else {
 				renameSync(link, previous);
@@ -129,7 +129,7 @@ function install(profile) {
 		if (check.dependencies?.[PACKAGE_NAME] === undefined) throw new Error("package.json dependency was not recorded");
 		if (!check.dsh.profile.bundles.includes(PACKAGE_NAME)) throw new Error("dsh.profile.bundles entry was not recorded");
 		if (!existsSync(join(link, "lib", "index.js"))) throw new Error(`symlink ${link} does not resolve to the plugin`);
-		if (!/name:\s*["']?dsh-app["']?\s*$/m.test(readFileSync(patchFile, "utf8"))) throw new Error("cordis.patch.yml row was not recorded");
+		if (!/name:\s*["']?dsh-open["']?\s*$/m.test(readFileSync(patchFile, "utf8"))) throw new Error("cordis.patch.yml row was not recorded");
 	} catch (error) {
 		for (const [copy, file] of backups) copyFileSync(copy, file);
 		for (const [previous, file] of moved) renameSync(previous, file);
@@ -155,23 +155,23 @@ function isSymlink(path) {
 
 const profile = profileDir();
 if (!existsSync(profile)) {
-	process.stderr.write(`dsh-app: no desktop profile at ${profile}\nStart DeepSeek Harness once, then re-run this installer.\n`);
+	process.stderr.write(`dsh-open: no desktop profile at ${profile}\nStart DeepSeek Harness once, then re-run this installer.\n`);
 	process.exitCode = 1;
 } else {
 	let result;
 	try {
 		result = install(profile);
 	} catch (error) {
-		process.stderr.write(`dsh-app: ${error instanceof Error ? error.message : String(error)}\n`);
+		process.stderr.write(`dsh-open: ${error instanceof Error ? error.message : String(error)}\n`);
 		process.stderr.write("No changes were kept: every edited file was restored from its backup.\n");
 		process.exitCode = 1;
 	}
 	if (result !== undefined) {
-		process.stdout.write(`dsh-app installed into ${profile}\n`);
+		process.stdout.write(`dsh-open installed into ${profile}\n`);
 		process.stdout.write(`  dependency  file:${REPO}\n`);
-		process.stdout.write(`  profile     dsh.profile.bundles += dsh-app\n`);
-		process.stdout.write(`  patch       cordis.patch.yml += insert dsh-app\n`);
-		process.stdout.write(`  link        node_modules/dsh-app -> ${REPO}\n`);
+		process.stdout.write(`  profile     dsh.profile.bundles += dsh-open\n`);
+		process.stdout.write(`  patch       cordis.patch.yml += insert dsh-open\n`);
+		process.stdout.write(`  link        node_modules/dsh-open -> ${REPO}\n`);
 		process.stdout.write(`  backups     ${String(result.backupCount)} file(s), stamp ${result.stamp}\n`);
 		if (hostRunning(profile)) {
 			process.stdout.write("\nThe app is running and loads profile bundles at boot: quit and reopen DeepSeek Harness.\n");

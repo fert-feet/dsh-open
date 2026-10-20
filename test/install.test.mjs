@@ -23,7 +23,7 @@ function install(home) {
  * @returns DSH_HOME path.
  */
 function home(manifest, patch = null) {
-	const root = mkdtempSync(join(tmpdir(), "dsh-app-install-"));
+	const root = mkdtempSync(join(tmpdir(), "dsh-open-install-"));
 	const profile = join(root, "profiles", "desktop");
 	mkdirSync(profile, { recursive: true });
 	writeFileSync(join(profile, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`);
@@ -37,11 +37,11 @@ test("a fresh profile gains the dependency, bundle row, patch row and symlink", 
 	assert.equal(result.status, 0, result.stderr);
 	const profile = join(root, "profiles", "desktop");
 	const manifest = JSON.parse(readFileSync(join(profile, "package.json"), "utf8"));
-	assert.match(manifest.dependencies["dsh-app"], /^file:/);
-	assert.deepEqual(manifest.dsh.profile.bundles, ["@deepseek-ai/dsh-base", "dsh-app"]);
+	assert.match(manifest.dependencies["dsh-open"], /^file:/);
+	assert.deepEqual(manifest.dsh.profile.bundles, ["@deepseek-ai/dsh-base", "dsh-open"]);
 	const patch = readFileSync(join(profile, "cordis.patch.yml"), "utf8");
-	assert.match(patch, /- insert:\n    - id: dsh-app\n      name: dsh-app/);
-	assert.ok(readlinkSync(join(profile, "node_modules", "dsh-app")).endsWith("dsh-app"));
+	assert.match(patch, /- insert:\n    - id: dsh-open\n      name: dsh-open/);
+	assert.ok(readlinkSync(join(profile, "node_modules", "dsh-open")).endsWith("dsh-open"));
 	assert.match(result.stdout, /installed into/);
 });
 
@@ -51,13 +51,13 @@ test("installing twice keeps the profile free of duplicates", () => {
 	assert.equal(install(root).status, 0);
 	const profile = join(root, "profiles", "desktop");
 	const manifest = JSON.parse(readFileSync(join(profile, "package.json"), "utf8"));
-	assert.deepEqual(manifest.dsh.profile.bundles, ["dsh-app"]);
+	assert.deepEqual(manifest.dsh.profile.bundles, ["dsh-open"]);
 	const patch = readFileSync(join(profile, "cordis.patch.yml"), "utf8");
-	assert.equal((patch.match(/name: dsh-app/g) ?? []).length, 1);
+	assert.equal((patch.match(/name: dsh-open/g) ?? []).length, 1);
 });
 
 test("a missing profile is reported without touching anything", () => {
-	const root = mkdtempSync(join(tmpdir(), "dsh-app-install-"));
+	const root = mkdtempSync(join(tmpdir(), "dsh-open-install-"));
 	const result = install(root);
 	assert.equal(result.status, 1);
 	assert.match(result.stderr, /no desktop profile/);
@@ -71,7 +71,7 @@ test("a failure restores the edited files", () => {
 	assert.equal(result.status, 1);
 	assert.match(result.stderr, /No changes were kept/);
 	const manifest = JSON.parse(readFileSync(join(profile, "package.json"), "utf8"));
-	assert.equal(manifest.dependencies["dsh-app"], undefined);
+	assert.equal(manifest.dependencies["dsh-open"], undefined);
 	assert.equal(manifest.dsh, undefined);
-	assert.equal(existsSync(join(profile, "node_modules", "dsh-app")), false);
+	assert.equal(existsSync(join(profile, "node_modules", "dsh-open")), false);
 });

@@ -40,7 +40,7 @@ function loadBundle(overrides = {}) {
 
 test("the bundle registers under the package name and exports apply + inject", () => {
 	const { registration, exportsObject, required } = loadBundle();
-	assert.equal(registration.id, "dsh-app");
+	assert.equal(registration.id, "dsh-open");
 	assert.equal(typeof exportsObject.apply, "function");
 	assert.equal(JSON.stringify(exportsObject.inject), JSON.stringify(["workspaces", "uiWorkspace"]));
 	assert.deepEqual(required, []);
@@ -96,11 +96,11 @@ function fakeNet(response, acks) {
 	let pendingCalls = 0;
 	return {
 		fetch: async (url, init) => {
-			if (url === "/dsh-app/pending") {
+			if (url === "/dsh-open/pending") {
 				pendingCalls += 1;
 				return { ok: true, json: async () => (pendingCalls === 1 ? response : { path: null }) };
 			}
-			if (url === "/dsh-app/ack") {
+			if (url === "/dsh-open/ack") {
 				acks.push(JSON.parse(init.body));
 				return { ok: true };
 			}

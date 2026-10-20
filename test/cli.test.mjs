@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
-const cli = new URL("../bin/dsh-app.js", import.meta.url).pathname;
+const cli = new URL("../bin/dsh-open.js", import.meta.url).pathname;
 const version = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 
 /**
@@ -30,19 +30,19 @@ function run(args, home) {
  * @returns paths for the test.
  */
 function fixture() {
-	const root = mkdtempSync(join(tmpdir(), "dsh-app-cli-"));
+	const root = mkdtempSync(join(tmpdir(), "dsh-open-cli-"));
 	const home = join(root, "home");
 	const project = join(root, "project");
-	mkdirSync(join(home, "run", "dsh-app"), { recursive: true });
+	mkdirSync(join(home, "run", "dsh-open"), { recursive: true });
 	mkdirSync(project, { recursive: true });
-	return { home, project, dir: join(home, "run", "dsh-app") };
+	return { home, project, dir: join(home, "run", "dsh-open") };
 }
 
 test("--help prints usage and exits 0", async () => {
 	const { done } = run(["--help"], tmpdir());
 	const result = await done;
 	assert.equal(result.code, 0);
-	assert.match(result.stdout, /Usage:\n {2}dsh-app \[dir\]/);
+	assert.match(result.stdout, /Usage:\n {2}dsh-open \[dir\]/);
 });
 
 test("--version prints the package version", async () => {

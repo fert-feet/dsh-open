@@ -22,7 +22,7 @@ afterEach(async () => {
  * @returns handles for the test.
  */
 async function setup() {
-	const runtimeDir = mkdtempSync(join(tmpdir(), "dsh-app-test-"));
+	const runtimeDir = mkdtempSync(join(tmpdir(), "dsh-open-test-"));
 	const server = new FakeWebServer();
 	await server.listen();
 	const { ctx, dispose } = fakeContext(server);
@@ -48,7 +48,7 @@ function writeRequest(runtimeDir, value) {
 
 /** A directory that exists for the duration of the test. */
 function makeWorkspace() {
-	const dir = mkdtempSync(join(tmpdir(), "dsh-app-workspace-"));
+	const dir = mkdtempSync(join(tmpdir(), "dsh-open-workspace-"));
 	cleanups.push(async () => rmSync(dir, { recursive: true, force: true }));
 	return dir;
 }
@@ -67,7 +67,7 @@ test("normalizeRequest rejects relative paths, missing nonce, and stale requests
 
 test("health reports the live host", async () => {
 	const { server } = await setup();
-	const { status, body } = await getJson(server, "/dsh-app/health");
+	const { status, body } = await getJson(server, "/dsh-open/health");
 	assert.equal(status, 200);
 	assert.equal(body.ok, true);
 	assert.equal(body.pid, process.pid);
@@ -81,7 +81,7 @@ test("a valid request becomes pending and the request file is consumed", async (
 	writeRequest(runtimeDir, { path: workspace, nonce: "nonce-1", at: Date.now() });
 
 	const pending = await waitFor(async () => {
-		const result = await getJson(server, "/dsh-app/pending");
+		const result = await getJson(server, "/dsh-open/pending");
 		return result.body.path === workspace ? result.body : undefined;
 	}, 4000, "pending request");
 	assert.equal(pending.nonce, "nonce-1");
@@ -92,15 +92,15 @@ test("an ack is persisted and clears the pending request", async () => {
 	const { runtimeDir, server } = await setup();
 	const workspace = makeWorkspace();
 	writeRequest(runtimeDir, { path: workspace, nonce: "nonce-2", at: Date.now() });
-	await waitFor(async () => (await getJson(server, "/dsh-app/pending")).body.nonce === "nonce-2", 4000, "pending");
+	await waitFor(async () => (await getJson(server, "/dsh-open/pending")).body.nonce === "nonce-2", 4000, "pending");
 
-	const ack = await postJson(server, "/dsh-app/ack", { nonce: "nonce-2", workspaceId: "ws-1" });
+	const ack = await postJson(server, "/dsh-open/ack", { nonce: "nonce-2", workspaceId: "ws-1" });
 	assert.equal(ack.status, 200);
 	assert.deepEqual(ack.body, { ok: true });
 	const persisted = JSON.parse(readFileSync(join(runtimeDir, "ack.json"), "utf8"));
 	assert.equal(persisted.nonce, "nonce-2");
 	assert.equal(persisted.workspaceId, "ws-1");
-	const after = await getJson(server, "/dsh-app/pending");
+	const after = await getJson(server, "/dsh-open/pending");
 	assert.equal(after.body.path, null);
 });
 
@@ -108,11 +108,11 @@ test("an ack for an unknown nonce is still accepted but does not clear pending",
 	const { runtimeDir, server } = await setup();
 	const workspace = makeWorkspace();
 	writeRequest(runtimeDir, { path: workspace, nonce: "nonce-3", at: Date.now() });
-	await waitFor(async () => (await getJson(server, "/dsh-app/pending")).body.nonce === "nonce-3", 4000, "pending");
+	await waitFor(async () => (await getJson(server, "/dsh-open/pending")).body.nonce === "nonce-3", 4000, "pending");
 
-	const ack = await postJson(server, "/dsh-app/ack", { nonce: "stale-nonce" });
+	const ack = await postJson(server, "/dsh-open/ack", { nonce: "stale-nonce" });
 	assert.equal(ack.status, 200);
-	const after = await getJson(server, "/dsh-app/pending");
+	const after = await getJson(server, "/dsh-open/pending");
 	assert.equal(after.body.nonce, "nonce-3");
 });
 
@@ -126,7 +126,7 @@ test("a request for a nonexistent directory is acked with an error", async () =>
 	}, 4000, "error ack");
 	assert.equal(ack.nonce, "nonce-4");
 	assert.equal(ack.error, "not-a-directory");
-	const after = await getJson(server, "/dsh-app/pending");
+	const after = await getJson(server, "/dsh-open/pending");
 	assert.equal(after.body.path, null);
 });
 
@@ -136,7 +136,7 @@ test("a stale request is dropped without an ack", async () => {
 	writeRequest(runtimeDir, { path: workspace, nonce: "nonce-5", at: Date.now() - 11 * 60 * 1000 });
 	await waitFor(() => !existsSync(join(runtimeDir, "request.json")), 4000, "request consumption");
 
-	const after = await getJson(server, "/dsh-app/pending");
+	const after = await getJson(server, "/dsh-open/pending");
 	assert.equal(after.body.path, null);
 	assert.equal(existsSync(join(runtimeDir, "ack.json")), false);
 });
@@ -145,13 +145,13 @@ test("an unparseable request file is dropped", async () => {
 	const { runtimeDir, server } = await setup();
 	writeFileSync(join(runtimeDir, "request.json"), "{not json");
 	await waitFor(() => !existsSync(join(runtimeDir, "request.json")), 4000, "request consumption");
-	const after = await getJson(server, "/dsh-app/pending");
+	const after = await getJson(server, "/dsh-open/pending");
 	assert.equal(after.body.path, null);
 });
 
 test("the ack route rejects a malformed body", async () => {
 	const { server } = await setup();
-	const response = await fetch(`http://127.0.0.1:${server.port}/dsh-app/ack`, {
+	const response = await fetch(`http://127.0.0.1:${server.port}/dsh-open/ack`, {
 		method: "POST",
 		headers: { "content-type": "application/json" },
 		body: JSON.stringify({ nope: true }),
@@ -164,6 +164,6 @@ test("dispose removes the routes and the presence file", async () => {
 	assert.equal(existsSync(join(runtimeDir, "host.json")), true);
 	dispose();
 	assert.equal(existsSync(join(runtimeDir, "host.json")), false);
-	const health = await fetch(`http://127.0.0.1:${server.port}/dsh-app/health`);
+	const health = await fetch(`http://127.0.0.1:${server.port}/dsh-open/health`);
 	assert.equal(health.status, 404);
 });

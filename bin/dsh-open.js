@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * `dsh-app <dir>` — open a folder in the running DeepSeek Harness desktop app.
+ * `dsh-open <dir>` — open a folder in the running DeepSeek Harness desktop app.
  *
  * The command is transport-agnostic at this layer: it drops a request into the
  * shared runtime directory, waits for the app's host half to ack it, and maps
  * the ack (or the absence of one) onto an exit code. The app is launched when
- * no live host answered, so a cold `dsh-app .` behaves like the warm one.
+ * no live host answered, so a cold `dsh-open .` behaves like the warm one.
  */
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -25,12 +25,12 @@ const APP_NAME = "DeepSeek Harness";
 const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 
 /**
- * Resolve the shared runtime directory (`$DSH_HOME/run/dsh-app`).
+ * Resolve the shared runtime directory (`$DSH_HOME/run/dsh-open`).
  * @returns absolute directory path.
  */
 function runtimeDir() {
 	const home = process.env.DSH_HOME?.trim() || join(homedir(), ".dsh");
-	return join(home, "run", "dsh-app");
+	return join(home, "run", "dsh-open");
 }
 
 /**
@@ -98,19 +98,19 @@ function launchApp() {
  * @param line - message text.
  */
 function fail(line) {
-	process.stderr.write(`dsh-app: ${line}\n`);
+	process.stderr.write(`dsh-open: ${line}\n`);
 }
 
 /**
  * Print usage.
  */
 function usage() {
-	process.stdout.write(`dsh-app ${VERSION} — open a folder in DeepSeek Harness
+	process.stdout.write(`dsh-open ${VERSION} — open a folder in DeepSeek Harness
 
 Usage:
-  dsh-app [dir]           open dir (default: .) in the running app
-  dsh-app --help          show this help
-  dsh-app --version       print the version
+  dsh-open [dir]           open dir (default: .) in the running app
+  dsh-open --help          show this help
+  dsh-open --version       print the version
 
 Options:
   --no-launch             never start the app; fail when it is not running
@@ -219,7 +219,7 @@ async function main(argv) {
 		if (!live && Date.now() - startedAt > 15000 && !hostAlive()) {
 			// No host announced itself: the app is starting, or the plugin was
 			// installed while the app was already running (hosts load plugins at boot).
-			fail("DeepSeek Harness has no live host; if you just installed dsh-app, restart the app once");
+			fail("DeepSeek Harness has no live host; if you just installed dsh-open, restart the app once");
 			return 1;
 		}
 		if (Date.now() > deadline) {

@@ -1,6 +1,6 @@
 /**
- * dsh-app browser half — runs inside the DSH Web GUI and turns a pending
- * `dsh-app <dir>` request into an opened workspace session.
+ * dsh-open browser half — runs inside the DSH Web GUI and turns a pending
+ * `dsh-open <dir>` request into an opened workspace session.
  *
  * This file is the readable source; `scripts/build-client.mjs` wraps it in the
  * `window.__ModuleLoader__.load({ id, factory })` envelope the client module
@@ -13,10 +13,10 @@
  */
 
 /** Host route returning the pending request, if any. */
-const pendingRoute = "/dsh-app/pending";
+const pendingRoute = "/dsh-open/pending";
 
 /** Host route that persists the outcome and unblocks the CLI. */
-const ackRoute = "/dsh-app/ack";
+const ackRoute = "/dsh-open/ack";
 
 /** How often the browser asks for a pending request. */
 const pollIntervalMs = 750;
@@ -56,7 +56,7 @@ async function waitFor(predicate, timeoutMs, label) {
 			value = undefined;
 		}
 		if (value) return value;
-		if (Date.now() > deadline) throw new Error(`dsh-app: timed out waiting for ${label}`);
+		if (Date.now() > deadline) throw new Error(`dsh-open: timed out waiting for ${label}`);
 		await new Promise((resolve) => setTimeout(resolve, 100));
 	}
 }
@@ -156,7 +156,7 @@ function startBridge(ctx) {
 	ctx.effect(() => () => {
 		stopped = true;
 		clearInterval(timer);
-	}, "dsh-app: pending poller");
+	}, "dsh-open: pending poller");
 }
 
 /**
