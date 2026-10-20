@@ -1,0 +1,172 @@
+/**
+ * dsh-app browser half — runs inside the DSH Web GUI and turns a pending
+ * `dsh-app <dir>` request into an opened workspace session.
+ *
+ * This file is the readable source; `scripts/build-client.mjs` wraps it in the
+ * `window.__ModuleLoader__.load({ id, factory })` envelope the client module
+ * system expects and writes `lib/client.js`. `npm test` fails when the two
+ * disagree.
+ *
+ * Flow: poll the host half for a pending request, adopt its directory as a
+ * workspace (creating it when the path is new), wait until the workspace
+ * snapshot carries it, open a session there, then ack so the CLI exits 0.
+ */
+
+/** Host route returning the pending request, if any. */
+const pendingRoute = "/dsh-app/pending";
+
+/** Host route that persists the outcome and unblocks the CLI. */
+const ackRoute = "/dsh-app/ack";
+
+/** How often the browser asks for a pending request. */
+const pollIntervalMs = 750;
+
+/** Upper bound for waiting on the workspace state stream (cold start includes host boot). */
+const stateTimeoutMs = 30000;
+
+/** Services this plugin cannot act without. */
+const inject = ["workspaces", "uiWorkspace"];
+
+/**
+ * Read an error's message for the ack payload.
+ * @param error - anything thrown.
+ * @returns the message text.
+ */
+function messageOf(error) {
+	// Duck-typed on purpose: errors here can come from the plugin's own realm or
+	// from the remote layer, and `instanceof` fails across realms.
+	if (error !== null && typeof error === "object" && typeof error.message === "string") return error.message;
+	return String(error);
+}
+
+/**
+ * Poll `predicate` until it returns a truthy value.
+ * @param predicate - sync check over current state.
+ * @param timeoutMs - give-up budget.
+ * @param label - failure description.
+ * @returns the first truthy value.
+ */
+async function waitFor(predicate, timeoutMs, label) {
+	const deadline = Date.now() + timeoutMs;
+	for (;;) {
+		let value;
+		try {
+			value = predicate();
+		} catch {
+			value = undefined;
+		}
+		if (value) return value;
+		if (Date.now() > deadline) throw new Error(`dsh-app: timed out waiting for ${label}`);
+		await new Promise((resolve) => setTimeout(resolve, 100));
+	}
+}
+
+/**
+ * Persist one outcome for the CLI. Failures are swallowed: the host half clears
+ * the pending request on a matching nonce anyway, and a lost ack only costs the
+ * CLI its timeout.
+ * @param nonce - request nonce echoed from the host half.
+ * @param extra - `{ workspaceId }` on success, `{ error }` on failure.
+ */
+async function sendAck(nonce, extra) {
+	try {
+		await fetch(ackRoute, {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ nonce, ...extra }),
+		});
+	} catch {
+		// The poll loop retries with the next pending request.
+	}
+}
+
+/**
+ * Adopt one directory into a workspace and open a session in it.
+ * @param ctx - client root context.
+ * @param path - absolute directory the CLI was invoked in.
+ * @returns the workspace id the session was opened in.
+ */
+async function adoptDirectory(ctx, path) {
+	const workspaces = ctx.get("workspaces");
+	const uiWorkspace = ctx.get("uiWorkspace");
+	const snapshot = () => workspaces.list?.getSnapshot?.();
+
+	await waitFor(() => snapshot()?.phase === "ready", stateTimeoutMs, "workspace list");
+
+	let workspace = snapshot().items.find((item) => item.path === path);
+	if (workspace === undefined) {
+		try {
+			workspace = await workspaces.create({ path });
+		} catch (error) {
+			// A concurrent adopt of the same directory can win the race; adopt its row.
+			workspace = snapshot().items.find((item) => item.path === path);
+			if (workspace === undefined) throw error;
+		}
+	}
+	const workspaceId = workspace.workspaceId;
+
+	// `uiWorkspace.openWorkspace` resolves the row from the snapshot, so the
+	// just-created workspace must be projected before the session can open.
+	await waitFor(
+		() => snapshot().items.some((item) => item.workspaceId === workspaceId),
+		stateTimeoutMs,
+		`workspace ${workspaceId}`,
+	);
+	await uiWorkspace.openWorkspace(workspaceId);
+	return workspaceId;
+}
+
+/**
+ * Start the polling bridge and stop it with the plugin fiber.
+ * @param ctx - client root context.
+ */
+function startBridge(ctx) {
+	/** Nonces currently being adopted, so a re-read pending row is not adopted twice. */
+	const inFlight = new Set();
+	let stopped = false;
+
+	const tick = async () => {
+		if (stopped) return;
+		let body;
+		try {
+			const response = await fetch(pendingRoute, { headers: { accept: "application/json" } });
+			if (!response.ok) return;
+			body = await response.json();
+		} catch {
+			return;
+		}
+		const nonce = body?.nonce;
+		const path = body?.path;
+		if (typeof nonce !== "string" || typeof path !== "string" || inFlight.has(nonce)) return;
+		inFlight.add(nonce);
+		try {
+			const workspaceId = await adoptDirectory(ctx, path);
+			await sendAck(nonce, { workspaceId });
+		} catch (error) {
+			await sendAck(nonce, { error: messageOf(error) });
+		} finally {
+			inFlight.delete(nonce);
+		}
+	};
+
+	const timer = setInterval(() => {
+		void tick();
+	}, pollIntervalMs);
+	void tick();
+	ctx.effect(() => () => {
+		stopped = true;
+		clearInterval(timer);
+	}, "dsh-app: pending poller");
+}
+
+/**
+ * Install the browser half.
+ * @param ctx - client root context (services named by `inject` are present).
+ */
+function apply(ctx) {
+	if (typeof window === "undefined") return;
+	startBridge(ctx);
+}
+
+exports.apply = apply;
+exports.inject = inject;

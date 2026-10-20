@@ -1,14 +1,7 @@
-# dsh-app bundle patch — the layer a `dsh plugin --profile desktop add dsh-app`
-# install appends to the profile's `dsh.profile.bundles`.
-#
-# One host row carries both halves: the Node side scans enabled Loader entries
-# for packages declaring `dsh.client` and hashes `exports["./client"]` into
-# window.__DSH_BOOT__, so the browser half rides this same entry.
-#
-# `runtimeDir` is the handshake directory shared by the host half and the
-# `dsh-app` CLI (request.json / ack.json / host.json live there).
+# dsh-app bundle layer: mounts the host half in every profile that lists
+# `dsh-app` in dsh.profile.bundles (or depends on it). The browser half needs
+# no row here: the client module system composes it from the package's
+# `dsh.client` declaration once this host row is active.
 - insert:
     - id: dsh-app
       name: dsh-app
-      config:
-        runtimeDir: !!js dshHomePath('run/dsh-app')
