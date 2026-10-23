@@ -1,63 +1,63 @@
 {
-  "name": "dsh-open",
-  "version": "0.1.0",
-  "description": "Open any folder in the running DeepSeek Harness desktop app — `dsh-open .`",
-  "type": "module",
-  "main": "lib/index.js",
-  "exports": {
-    ".": {
-      "default": "./lib/index.js"
-    },
-    "./client": {
-      "default": "./lib/client.js"
-    },
-    "./package.json": "./package.json"
-  },
-  "bin": {
-    "dsh-open": "bin/dsh-open.js"
-  },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    },
-    "client": {
-      "platform": "web"
-    }
-  },
-  "files": [
-    "lib",
-    "bin",
-    "cordis.patch.yml",
-    "README.md",
-    "LICENSE"
-  ],
-  "scripts": {
-    "build:client": "node scripts/build-client.mjs",
-    "test": "node scripts/build-client.mjs --check && node --test \"test/**/*.test.mjs\"",
-    "e2e": "node scripts/e2e.mjs",
-    "install:desktop": "node scripts/install.mjs",
-    "prepublishOnly": "npm run build:client && npm test"
-  },
-  "engines": {
-    "node": ">=22"
-  },
-  "private": true,
-  "license": "MIT",
-  "author": "fert-feet",
-  "keywords": [
-    "dsh",
-    "dsh-plugin",
-    "deepseek-harness",
-    "workspace",
-    "desktop",
-    "cli"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/fert-feet/dsh-open.git"
-  },
-  "homepage": "https://github.com/fert-feet/dsh-open#readme",
-  "bugs": {
-    "url": "https://github.com/fert-feet/dsh-open/issues"
-  }
+	"name": "dsh-open",
+	"version": "0.2.0",
+	"description": "Open any folder in the running DeepSeek Harness desktop app — `dsh-open .`",
+	"type": "module",
+	"main": "lib/index.js",
+	"exports": {
+		".": {
+			"default": "./lib/index.js"
+		},
+		"./client": {
+			"default": "./lib/client.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"bin": {
+		"dsh-open": "bin/dsh-open.js"
+	},
+	"dsh": {
+		"bundle": {
+			"patch": "./cordis.patch.yml"
+		},
+		"client": {
+			"platform": "web"
+		}
+	},
+	"files": [
+		"lib",
+		"bin",
+		"cordis.patch.yml",
+		"README.md",
+		"LICENSE"
+	],
+	"scripts": {
+		"build:client": "node scripts/build-client.mjs",
+		"test": "node scripts/build-client.mjs --check && node --test \"test/**/*.test.mjs\"",
+		"e2e": "node scripts/e2e.mjs",
+		"install:desktop": "node scripts/install.mjs",
+		"prepublishOnly": "npm run build:client && npm test"
+	},
+	"engines": {
+		"node": ">=22"
+	},
+	"private": true,
+	"license": "MIT",
+	"author": "fert-feet",
+	"keywords": [
+		"dsh",
+		"dsh-plugin",
+		"deepseek-harness",
+		"workspace",
+		"desktop",
+		"cli"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/fert-feet/dsh-open.git"
+	},
+	"homepage": "https://github.com/fert-feet/dsh-open#readme",
+	"bugs": {
+		"url": "https://github.com/fert-feet/dsh-open/issues"
+	}
 }

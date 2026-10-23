@@ -36,8 +36,16 @@ entry follow. Until then, install from a checkout (below).
 git clone https://github.com/fert-feet/dsh-open
 cd dsh-open
 node scripts/install.mjs
-npm link                 # puts the dsh-open binary on PATH
 ```
+
+Then get the command itself onto PATH — either from inside the app or from a
+terminal:
+
+- **From the app (no terminal, no npm):** Settings → **Plugins** → **dsh-open** →
+  **Install command**. The plugin writes a small wrapper to `~/.local/bin` (or the
+  first writable directory on its PATH) that runs the copy already installed in
+  the profile. The same page removes it again.
+- **From a terminal:** `npm link` links the checkout's bin into the global prefix.
 
 `install.mjs` edits the desktop profile at `$DSH_HOME/profiles/desktop`
 (`~/.dsh` by default) in exactly four ways:
@@ -53,7 +61,12 @@ Every edited file is copied to `*.dsh-open-<stamp>.bak` first, and any failure
 restores all of them. Installing twice is a no-op.
 
 The app reads profile bundles at boot, so **quit and reopen DeepSeek Harness**
-once after installing.
+once after installing. If the command still is not found in a new terminal, add
+`~/.local/bin` to PATH:
+
+```sh
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+```
 
 ## How it works
 
@@ -83,9 +96,15 @@ the desktop app and `dsh web` both use it):
 - `host.log` — breadcrumbs (`queued`, `ack`, `dropped`)
 
 The host half is a cordis plugin (`lib/index.js`, zero dependencies) that
-registers three exact routes on `ctx.webServer` and disposes them with its fiber.
+registers five exact routes on `ctx.webServer` and disposes them with its fiber:
+the three mailbox routes above, plus `GET /dsh-open/command` (status) and
+`POST /dsh-open/setup` (install/remove the command shim).
+
 The browser half (`lib/client.js`, bundled from `src/client.js`) declares
-`inject: ["workspaces", "uiWorkspace"]`, so cordis hands it both services.
+`inject: ["workspaces", "uiWorkspace"]`, so cordis hands it both services. It
+polls the mailbox and contributes the **dsh-open** tab to the Plugins settings
+section through the `settings.plugins.tab` slot contract; the tab is inert on a
+deployment that does not compose that slot.
 
 ## Security
 
@@ -93,6 +112,11 @@ The browser half (`lib/client.js`, bundled from `src/client.js`) declares
   authenticated**: any process on the machine can queue a directory name. What
   that buys is a workspace switch — the plugin never reads file contents, never
   runs a command, and only `stat`s the path to confirm it is a directory.
+- `POST /dsh-open/setup` is the only route that mutates anything outside the
+  mailbox. It is fenced three ways: loopback connections only, a mandatory
+  `x-dsh-open: setup` header (a cross-site form cannot set one), and a
+  same-origin `Origin` check. It writes exactly one file — the shim — and refuses
+  to remove a file it did not write.
 - The plugin writes only under `$DSH_HOME/run/dsh-open` (mailbox) and, at install
   time, the four profile edits listed above. It makes no network calls.
 - `install.mjs` is a developer script. It is not run by `npm install`, and users
@@ -109,6 +133,9 @@ The browser half (`lib/client.js`, bundled from `src/client.js`) declares
 - **The browser half needs a page**: if the app window is closed but the host
   runs, requests queue until a window polls (every 750 ms) or the CLI times out
   (15 s).
+- **The settings tab appears after a restart**: the browser half arrives with the
+  boot payload and talks to a route the host half registers at boot, so a fresh
+  install (or an upgrade) shows the working tab only after the app restarts.
 
 ## Uninstall
 
@@ -125,7 +152,7 @@ verbatim.
 ## Development
 
 ```sh
-npm test          # client bundle freshness + 27 unit tests
+npm test          # client bundle freshness + unit tests (host, browser, CLI, installer)
 npm run e2e       # boots a real dsh web host from the app bundle and drives the
                   # whole chain, including the boot payload and shutdown cleanup
 ```
