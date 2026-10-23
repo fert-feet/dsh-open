@@ -2,6 +2,3 @@ node_modules/
 backup/
 *.log
 .DS_Store
-
-# Local handoff notes (not published)
-HANDOFF.md
