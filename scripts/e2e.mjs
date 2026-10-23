@@ -134,6 +134,14 @@ try {
 	const health = await api(base, token, "/dsh-open/health");
 	if (health.ok !== true || health.pending !== null) throw new Error(`unexpected health: ${JSON.stringify(health)}`);
 
+	// The settings page needs the presence of the command route and a usable
+	// interpreter for the shim it would write.
+	const command = await api(base, token, "/dsh-open/command");
+	if (typeof command.installed !== "boolean") throw new Error(`unexpected command status: ${JSON.stringify(command)}`);
+	if (typeof command.interpreter?.binary !== "string" || command.interpreter.binary === "") {
+		throw new Error(`the command route must name an interpreter: ${JSON.stringify(command.interpreter)}`);
+	}
+
 	// The browser half must be part of the boot payload served to the window.
 	// The shell redirects once to hand out its session cookie, and the boot
 	// payload is only rendered for a cookie-bearing request.
@@ -177,7 +185,7 @@ try {
 	host.child.kill("SIGTERM");
 	await host.exited;
 	if (existsSync(join(fixturePaths.run, "host.json"))) throw new Error("host.json survived the shutdown");
-	process.stdout.write("e2e: ok — request → host → browser ack → CLI exit 0, boot payload and cleanup verified\n");
+	process.stdout.write("e2e: ok — request → host → browser ack → CLI exit 0, command route, boot payload and cleanup verified\n");
 } catch (error) {
 	bail(error instanceof Error ? error.message : String(error));
 	if (host !== undefined) {
