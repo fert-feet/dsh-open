@@ -314,12 +314,22 @@ function CommandSettingsPage() {
  * @param ctx - client root context.
  */
 function contributeSettingsPage(ctx) {
-	let slots;
+	// The bridge above matters more than the page: any surprise here (a client
+	// contract that moved, a service that is not reachable) leaves `dsh-open .`
+	// working and only costs the settings tab.
 	try {
-		slots = ctx.get("slots");
+		addTab(ctx);
 	} catch {
-		return;
+		// Ignored on purpose.
 	}
+}
+
+/**
+ * Register the tab itself.
+ * @param ctx - client root context.
+ */
+function addTab(ctx) {
+	const slots = ctx.get("slots");
 	if (slots === undefined || slots === null || typeof slots.inject !== "function") return;
 	ctx.effect(
 		() =>
