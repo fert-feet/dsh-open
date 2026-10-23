@@ -10,6 +10,9 @@ import { afterEach, test } from "node:test";
 import { apply, normalizeRequest } from "../lib/index.js";
 import { FakeWebServer, fakeContext, getJson, postJson, waitFor } from "./helpers/fake-web-server.mjs";
 
+/** Version the routes report; read from the manifest so a bump cannot skew it. */
+const version = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+
 const cleanups = [];
 
 /** Register a teardown for the current test. */
@@ -193,7 +196,7 @@ test("the command route reports an empty machine as not installed", async () => 
 		assert.equal(status, 200);
 		assert.equal(body.installed, false);
 		assert.equal(body.onPath, false);
-		assert.equal(body.version, "0.1.0");
+		assert.equal(body.version, version);
 		assert.equal(typeof body.binScript, "string");
 		assert.equal(body.interpreter.electron, Boolean(process.versions.electron));
 	});
