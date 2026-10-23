@@ -13,9 +13,10 @@ const bundleSource = readFileSync(new URL("../lib/client.js", import.meta.url), 
 /**
  * Evaluate the bundle against a sandbox `window.__ModuleLoader__`.
  * @param overrides - sandbox members to add (fetch, timers, ...).
+ * @param platformModules - modules the loader's `require` resolves.
  * @returns the captured registration and the materialized exports.
  */
-function loadBundle(overrides = {}) {
+function loadBundle(overrides = {}, platformModules = {}) {
 	let registration;
 	const sandbox = {
 		window: {
@@ -33,6 +34,7 @@ function loadBundle(overrides = {}) {
 	const required = [];
 	const exportsObject = registration.factory((id) => {
 		required.push(id);
+		if (id in platformModules) return platformModules[id];
 		throw new Error(`unexpected require(${id})`);
 	});
 	return { registration, exportsObject, required };
@@ -52,10 +54,11 @@ test("the bundle registers under the package name and exports apply + inject", (
  * @param opened - collected openWorkspace calls.
  * @param failCreate - when set, `workspaces.create` rejects with it.
  */
-function fakeContext(acks, opened, failCreate) {
+function fakeContext(acks, opened, failCreate, extraServices = {}) {
 	const items = [];
 	const created = [];
 	const services = {
+		...extraServices,
 		workspaces: {
 			list: {
 				getSnapshot: () => ({ phase: "ready", items }),
@@ -145,4 +148,42 @@ test("a failing adoption is acked with an error and opens nothing", async () => 
 	assert.equal(acks.length, 1);
 	assert.equal(acks[0].nonce, "n2");
 	assert.equal(acks[0].error, "host said no");
+});
+
+test("apply is a no-op beyond the bridge when no slots service exists", () => {
+	const acks = [];
+	const opened = [];
+	const { ctx, dispose } = fakeContext(acks, opened);
+	const { fetch, setInterval, clearInterval } = fakeNet({ path: null }, acks);
+	const { exportsObject } = loadBundle({ fetch, setInterval, clearInterval, setTimeout });
+	assert.doesNotThrow(() => exportsObject.apply(ctx));
+	dispose();
+});
+
+test("the settings page registers into settings.plugins.tab", () => {
+	const registered = [];
+	let injected;
+	const slots = {
+		inject(name, callback) {
+			injected = name;
+			return callback();
+		},
+		register(contribution, component) {
+			registered.push({ contribution, component });
+			return () => {};
+		},
+	};
+	const { ctx, dispose } = fakeContext([], [], undefined, { slots });
+	const { fetch, setInterval, clearInterval } = fakeNet({ path: null }, []);
+	const { exportsObject } = loadBundle({ fetch, setInterval, clearInterval, setTimeout });
+	exportsObject.apply(ctx);
+	dispose();
+
+	assert.equal(injected, "settings.plugins.tab");
+	assert.equal(registered.length, 1);
+	assert.equal(registered[0].contribution.name, "settings.plugins.tab");
+	assert.equal(registered[0].contribution.id, "dsh-open");
+	assert.equal(registered[0].contribution.order, 40);
+	assert.equal(registered[0].contribution.label(), "dsh-open");
+	assert.equal(typeof registered[0].component, "function");
 });

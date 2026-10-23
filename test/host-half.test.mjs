@@ -3,7 +3,7 @@
  * listener with a filesystem that behaves like the CLI's.
  */
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, test } from "node:test";
@@ -166,4 +166,89 @@ test("dispose removes the routes and the presence file", async () => {
 	assert.equal(existsSync(join(runtimeDir, "host.json")), false);
 	const health = await fetch(`http://127.0.0.1:${server.port}/dsh-open/health`);
 	assert.equal(health.status, 404);
+});
+
+/**
+ * Run `body` with HOME and PATH pointed at a fresh temp home, so the command
+ * routes see an empty machine instead of the developer's own directories.
+ * @returns whatever `body` returns.
+ */
+async function inScratchHome(body) {
+	const home = mkdtempSync(join(tmpdir(), "dsh-open-home-"));
+	const before = { HOME: process.env.HOME, PATH: process.env.PATH };
+	process.env.HOME = home;
+	process.env.PATH = "/usr/bin:/bin";
+	cleanups.push(async () => {
+		process.env.HOME = before.HOME;
+		process.env.PATH = before.PATH;
+		rmSync(home, { recursive: true, force: true });
+	});
+	return body(home);
+}
+
+test("the command route reports an empty machine as not installed", async () => {
+	const { server } = await setup();
+	await inScratchHome(async () => {
+		const { status, body } = await getJson(server, "/dsh-open/command");
+		assert.equal(status, 200);
+		assert.equal(body.installed, false);
+		assert.equal(body.onPath, false);
+		assert.equal(body.version, "0.1.0");
+		assert.equal(typeof body.binScript, "string");
+		assert.equal(body.interpreter.electron, Boolean(process.versions.electron));
+	});
+});
+
+test("the setup route installs the shim and the command route sees it", async () => {
+	const { server } = await setup();
+	await inScratchHome(async (home) => {
+		const install = await postJson(server, "/dsh-open/setup", { action: "install" }, { "x-dsh-open": "setup" });
+		assert.equal(install.status, 200);
+		assert.equal(install.body.ok, true);
+		assert.equal(install.body.status.installed, true);
+
+		const shimPath = join(home, ".local", "bin", "dsh-open");
+		assert.equal(install.body.status.shimPath, shimPath);
+		assert.equal(statSync(shimPath).mode & 0o777, 0o755);
+		assert.match(readFileSync(shimPath, "utf8"), /dsh-open command shim/);
+
+		const status = await getJson(server, "/dsh-open/command");
+		assert.equal(status.body.installed, true);
+		assert.equal(status.body.managed, true);
+
+		const remove = await postJson(server, "/dsh-open/setup", { action: "remove" }, { "x-dsh-open": "setup" });
+		assert.equal(remove.status, 200);
+		assert.equal(remove.body.removed, true);
+		assert.equal(existsSync(shimPath), false);
+	});
+});
+
+test("the setup route is refused without its header", async () => {
+	const { server } = await setup();
+	await inScratchHome(async () => {
+		const { status, body } = await postJson(server, "/dsh-open/setup", { action: "install" });
+		assert.equal(status, 403);
+		assert.equal(body.error, "missing-header");
+	});
+});
+
+test("the setup route refuses a cross-origin caller", async () => {
+	const { server } = await setup();
+	await inScratchHome(async () => {
+		const { status, body } = await postJson(server, "/dsh-open/setup", { action: "install" }, {
+			"x-dsh-open": "setup",
+			origin: "http://evil.example",
+		});
+		assert.equal(status, 403);
+		assert.equal(body.error, "bad-origin");
+	});
+});
+
+test("the setup route rejects unknown actions", async () => {
+	const { server } = await setup();
+	await inScratchHome(async () => {
+		const { status, body } = await postJson(server, "/dsh-open/setup", { action: "nuke" }, { "x-dsh-open": "setup" });
+		assert.equal(status, 400);
+		assert.equal(body.error, "bad-action");
+	});
 });

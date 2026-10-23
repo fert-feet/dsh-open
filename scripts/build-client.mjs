@@ -8,6 +8,10 @@
  * import. Keeping it generated means the readable source stays plain and the
  * shipped artifact stays in the exact shape the loader expects.
  *
+ * The factory also binds the loader's `require` to `hostRequire` in source
+ * scope, which is how a source file pulls platform modules (react, primitives)
+ * without knowing the envelope.
+ *
  * Usage:
  *   node scripts/build-client.mjs          # (re)write lib/client.js
  *   node scripts/build-client.mjs --check  # exit 1 when the artifact is stale
@@ -35,6 +39,8 @@ window.__ModuleLoader__.load({
 \t\tvar module = { exports: {} };
 \t\tvar exports = module.exports;
 \t\tObject.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+\t\t// Generated prelude: platform modules come from the loader's require.
+\t\tconst hostRequire = require;
 ${indent(source)}
 \t\treturn module.exports;
 \t}

@@ -132,12 +132,13 @@ export async function getJson(server, path) {
  * @param server - listening FakeWebServer.
  * @param path - absolute pathname.
  * @param body - JSON payload.
+ * @param headers - extra request headers.
  * @returns parsed body and status.
  */
-export async function postJson(server, path, body) {
+export async function postJson(server, path, body, headers = {}) {
 	const response = await fetch(`http://127.0.0.1:${server.port}${path}`, {
 		method: "POST",
-		headers: { "content-type": "application/json" },
+		headers: { "content-type": "application/json", ...headers },
 		body: JSON.stringify(body),
 	});
 	return { status: response.status, body: await response.json() };
