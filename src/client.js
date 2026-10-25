@@ -221,7 +221,34 @@ const styles = {
 };
 
 /**
- * Settings page: state of the command plus the button that fixes it.
+ * Turn a setup response into the sentence the page shows under the button.
+ * @param action - the action that was requested.
+ * @param body - the host's response body.
+ * @returns plain text, no markup.
+ */
+function describeResult(action, body) {
+	const path = body?.path;
+	if (action === "remove") {
+		if (body?.removed === true) return "Removed the command. Open a new terminal to pick up the shorter PATH.";
+		if (body?.reason === "not-ours") return `${body.shimPath} was not written by this plugin, so it was left in place.`;
+		return "The command was not installed, so there was nothing to remove.";
+	}
+	if (path?.changed === true) return `Installed. Added its folder to ${path.rcFile} — open a new terminal (or run \`exec zsh\`) to use it.`;
+	if (path?.reason === "already-on-path") return "Installed, and its folder is already on your shell PATH.";
+	if (path?.reason === "login-path-unknown") {
+		return `Installed, but your login shell's PATH could not be read. If \`dsh-open\` is not found, add ${body?.dir} to PATH in ${path?.rcFile ?? "your shell profile"}.`;
+	}
+	if (path?.reason === "unsupported-shell") {
+		return `Installed, but this shell has no profile this plugin knows how to edit. Add ${body?.dir} to PATH yourself.`;
+	}
+	if (path?.reason === "write-failed") {
+		return `Installed, but the shell profile could not be updated: ${path.detail ?? "write failed"}. Add ${body?.dir} to PATH yourself.`;
+	}
+	return "Installed.";
+}
+
+/**
+ * Settings page: state of the command plus the one button that fixes it.
  *
  * Props are injected by the slot registry below; `react` comes from the
  * platform module table, so this bundle ships no UI library of its own.
@@ -233,6 +260,7 @@ function CommandSettingsPage() {
 	const [status, setStatus] = useState({ phase: "loading" });
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState(undefined);
+	const [notice, setNotice] = useState(undefined);
 
 	const refresh = useCallback(async () => {
 		try {
@@ -251,8 +279,10 @@ function CommandSettingsPage() {
 	const run = async (action) => {
 		setBusy(true);
 		setError(undefined);
+		setNotice(undefined);
 		try {
-			await mutateCommand(action);
+			const body = await mutateCommand(action);
+			setNotice(describeResult(action, body));
 			await refresh();
 		} catch (failure) {
 			setError(messageOf(failure));
@@ -265,23 +295,34 @@ function CommandSettingsPage() {
 	const value = ready ? status.value : undefined;
 	const installed = value?.installed === true;
 	const managed = value?.managed === true;
-	const onPath = value?.onPath === true;
+	const canRemove = installed && managed;
 
 	const summary = ready
 		? installed
 			? managed
 				? `Installed at ${value.shimPath}.`
-				: `${value.shimPath} exists but was not written by this plugin, so it is left alone.`
-			: "This plugin has not installed the command yet."
+				: `${value.shimPath} was not written by this plugin, so it was left alone.`
+			: "The command is not installed yet."
 		: status.phase === "loading"
 			? "Checking the command…"
 			: "The host half did not answer, so the command state is unknown.";
 
+	const pathLine =
+		ready && installed
+			? value.onLoginPath === true
+				? "Your login shell already finds it."
+				: value.pathConfigured === true
+					? `Its PATH entry is in ${value.rcFile}; that takes effect in a new terminal.`
+					: value.loginPathKnown === false
+						? "The login shell's PATH could not be read, so whether a new terminal finds it is unknown."
+						: "Its folder is not on your login shell's PATH."
+			: undefined;
+
 	const hint =
-		ready && installed && managed && !onPath
-			? "Its directory is not on the PATH this app was started with; add it to your shell profile if `dsh-open` is not found in a new terminal."
-			: ready && !installed
-				? "Installs a small wrapper in ~/.local/bin that runs the copy already inside this app's profile. An existing `dsh-open` elsewhere on PATH is left alone."
+		ready && !installed
+			? "One click writes a small wrapper next to the app and adds its folder to your shell profile, so new terminals find `dsh-open`. No terminal needed."
+			: ready && installed && !managed
+				? "Install command writes this plugin's own copy to ~/.local/bin and adds that folder to your shell PATH; the existing file stays untouched."
 				: undefined;
 
 	return react.createElement(
@@ -289,6 +330,8 @@ function CommandSettingsPage() {
 		{ style: styles.section },
 		react.createElement("h3", { style: styles.title }, "dsh-open command"),
 		react.createElement("p", { style: styles.body }, summary),
+		pathLine === undefined ? null : react.createElement("p", { style: styles.muted }, pathLine),
+		notice === undefined ? null : react.createElement("p", { style: styles.muted }, notice),
 		hint === undefined ? null : react.createElement("p", { style: styles.muted }, hint),
 		error === undefined ? null : react.createElement("p", { style: styles.error }, error),
 		ready
@@ -297,10 +340,10 @@ function CommandSettingsPage() {
 					{ style: styles.actions },
 					react.createElement(
 						"button",
-						{ type: "button", style: styles.button, disabled: busy, onClick: () => void run(installed && managed ? "remove" : "install") },
-						busy ? "Working…" : installed && managed ? "Remove command" : "Install command",
+						{ type: "button", style: styles.button, disabled: busy, onClick: () => void run(canRemove ? "remove" : "install") },
+						busy ? "Working…" : canRemove ? "Remove command" : "Install command",
 					),
-					react.createElement("code", { style: styles.code }, installed && managed ? "dsh-open ." : ""),
+					react.createElement("code", { style: styles.code }, canRemove ? "dsh-open ." : ""),
 				)
 			: null,
 	);

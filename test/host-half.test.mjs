@@ -22,14 +22,15 @@ afterEach(async () => {
 
 /**
  * Stand up a runtime dir, a listening server, and the plugin mounted on it.
+ * @param config - extra plugin config (e.g. a `loginPath` stub for the probe).
  * @returns handles for the test.
  */
-async function setup() {
+async function setup(config = {}) {
 	const runtimeDir = mkdtempSync(join(tmpdir(), "dsh-open-test-"));
 	const server = new FakeWebServer();
 	await server.listen();
 	const { ctx, dispose } = fakeContext(server);
-	apply(ctx, { runtimeDir });
+	apply(ctx, { runtimeDir, ...config });
 	cleanups.push(async () => {
 		dispose();
 		await server.close();
@@ -253,5 +254,54 @@ test("the setup route rejects unknown actions", async () => {
 		const { status, body } = await postJson(server, "/dsh-open/setup", { action: "nuke" }, { "x-dsh-open": "setup" });
 		assert.equal(status, 400);
 		assert.equal(body.error, "bad-action");
+	});
+});
+
+test("the setup route adds the shell PATH block and remove takes it back out", async () => {
+	const { server } = await setup({ loginPath: () => ["/usr/bin", "/bin"], shell: "/bin/zsh" });
+	await inScratchHome(async (home) => {
+		const rc = join(home, ".zshrc");
+		const before = await getJson(server, "/dsh-open/command");
+		assert.equal(before.body.rcFile, rc);
+		assert.equal(before.body.pathConfigured, false);
+		assert.equal(before.body.loginPathKnown, true);
+		assert.equal(before.body.onLoginPath, false);
+
+		const install = await postJson(server, "/dsh-open/setup", { action: "install" }, { "x-dsh-open": "setup" });
+		assert.equal(install.body.ok, true);
+		assert.equal(install.body.path.changed, true);
+		assert.equal(install.body.path.rcFile, rc);
+		const profile = readFileSync(rc, "utf8");
+		assert.match(profile, /# >>> dsh-open >>>/);
+		assert.ok(profile.includes(`export PATH='${join(home, ".local", "bin")}':"$PATH"`));
+
+		const after = await getJson(server, "/dsh-open/command");
+		assert.equal(after.body.pathConfigured, true);
+
+		const remove = await postJson(server, "/dsh-open/setup", { action: "remove" }, { "x-dsh-open": "setup" });
+		assert.equal(remove.body.removed, true);
+		assert.equal(remove.body.path.changed, true);
+		assert.equal(readFileSync(rc, "utf8"), "");
+	});
+});
+
+test("a login shell that already sees the shim keeps its profile untouched", async () => {
+	await inScratchHome(async (home) => {
+		const local = join(home, ".local", "bin");
+		const { server } = await setup({ loginPath: () => [local, "/usr/bin"], shell: "/bin/zsh" });
+		const install = await postJson(server, "/dsh-open/setup", { action: "install" }, { "x-dsh-open": "setup" });
+		assert.equal(install.body.path.changed, false);
+		assert.equal(install.body.path.reason, "already-on-path");
+		assert.equal(existsSync(join(home, ".zshrc")), false);
+	});
+});
+
+test("a login shell that cannot be read leaves the profile alone and says so", async () => {
+	await inScratchHome(async (home) => {
+		const { server } = await setup({ loginPath: () => undefined, shell: "/bin/zsh" });
+		const install = await postJson(server, "/dsh-open/setup", { action: "install" }, { "x-dsh-open": "setup" });
+		assert.equal(install.body.ok, true);
+		assert.equal(install.body.path.reason, "login-path-unknown");
+		assert.equal(existsSync(join(home, ".zshrc")), false);
 	});
 });

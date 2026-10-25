@@ -6,12 +6,17 @@ import test from "node:test";
 
 import {
 	SHIM_MARKER,
+	addPathToShell,
 	candidateDirs,
 	commandStatus,
 	installCommand,
+	loginPathDirs,
+	pathBlock,
 	quote,
 	removeCommand,
+	removePathFromShell,
 	shimScript,
+	shellRcTarget,
 } from "../lib/command.js";
 
 function sandbox() {
@@ -166,6 +171,106 @@ test("installCommand refuses when no directory can be written", () => {
 		// `~/.local/bin` is still writable in a temp home, so the install lands
 		// there; the assertion is that no failure escapes as a throw.
 		assert.equal(result.ok, true);
+	} finally {
+		box.cleanup();
+	}
+});
+
+test("pathBlock prepends the directory and is fenced by markers", () => {
+	const posix = pathBlock({ dir: "/opt/my tools/bin", syntax: "posix" });
+	assert.match(posix, /^# >>> dsh-open >>>\n/);
+	assert.match(posix, /\nexport PATH='\/opt\/my tools\/bin':"\$PATH"\n/);
+	assert.match(posix, /# <<< dsh-open <<<\n$/);
+
+	const fish = pathBlock({ dir: "/opt/my tools/bin", syntax: "fish" });
+	assert.match(fish, /\nfish_add_path -g '\/opt\/my tools\/bin'\n/);
+	assert.doesNotMatch(fish, /export PATH/);
+});
+
+test("shellRcTarget follows the login shell and refuses unknown ones", () => {
+	assert.equal(shellRcTarget({ shell: "/bin/zsh", home: "/home/u" }).file, "/home/u/.zshrc");
+	assert.equal(shellRcTarget({ shell: "/usr/local/bin/bash", home: "/home/u" }).file, "/home/u/.bash_profile");
+	assert.equal(shellRcTarget({ shell: "/opt/homebrew/bin/fish", home: "/home/u" }).file, "/home/u/.config/fish/config.fish");
+	assert.equal(shellRcTarget({ shell: "/bin/tcsh", home: "/home/u" }), undefined);
+});
+
+test("addPathToShell is idempotent and replaces a stale directory", () => {
+	const box = sandbox();
+	try {
+		const rc = join(box.home, ".zshrc");
+		writeFileSync(rc, "# existing\nexport FOO=1\n");
+		const first = addPathToShell({ dir: join(box.home, ".local", "bin"), shell: "/bin/zsh", home: box.home });
+		assert.equal(first.changed, true);
+		assert.equal(first.rcFile, rc);
+
+		const text = readFileSync(rc, "utf8");
+		assert.match(text, /^# existing\nexport FOO=1\n\n# >>> dsh-open >>>/);
+		assert.match(text, /export PATH='.*\.local\/bin':"\$PATH"/);
+
+		const again = addPathToShell({ dir: join(box.home, ".local", "bin"), shell: "/bin/zsh", home: box.home });
+		assert.equal(again.changed, false);
+		assert.equal(readFileSync(rc, "utf8"), text);
+
+		const moved = addPathToShell({ dir: "/opt/homebrew/bin", shell: "/bin/zsh", home: box.home });
+		assert.equal(moved.changed, true);
+		const updated = readFileSync(rc, "utf8");
+		assert.equal((updated.match(/# >>> dsh-open >>>/g) ?? []).length, 1);
+		assert.match(updated, /export PATH='\/opt\/homebrew\/bin':"\$PATH"/);
+		assert.doesNotMatch(updated, /\.local\/bin':"/);
+	} finally {
+		box.cleanup();
+	}
+});
+
+test("removePathFromShell restores the file without the block", () => {
+	const box = sandbox();
+	try {
+		const rc = join(box.home, ".zshrc");
+		const original = "# existing\nexport FOO=1\n";
+		writeFileSync(rc, original);
+		addPathToShell({ dir: join(box.home, ".local", "bin"), shell: "/bin/zsh", home: box.home });
+
+		const removed = removePathFromShell({ shell: "/bin/zsh", home: box.home });
+		assert.equal(removed.changed, true);
+		assert.equal(readFileSync(rc, "utf8"), original);
+
+		const again = removePathFromShell({ shell: "/bin/zsh", home: box.home });
+		assert.equal(again.changed, false);
+		assert.equal(again.reason, "no-block");
+	} finally {
+		box.cleanup();
+	}
+});
+
+test("loginPathDirs reads the last line and tolerates a failing shell", () => {
+	const seen = [];
+	const dirs = loginPathDirs({
+		shell: "/bin/zsh",
+		run: (shell, args) => {
+			seen.push([shell, ...args]);
+			return "motd line\n/usr/local/bin:/usr/bin:/bin\n";
+		},
+	});
+	assert.deepEqual(dirs, ["/usr/local/bin", "/usr/bin", "/bin"]);
+	assert.deepEqual(seen[0], ["/bin/zsh", "-lic", 'printf %s "$PATH"']);
+	assert.equal(loginPathDirs({ shell: "/bin/zsh", run: () => "" }), undefined);
+	assert.equal(loginPathDirs({ shell: "/bin/zsh", run: () => { throw new Error("no shell"); } }), undefined);
+});
+
+test("commandStatus reports the login shell PATH when it is known", () => {
+	const box = sandbox();
+	try {
+		installCommand({ script: "#!/bin/sh\n", home: box.home, envPath: "/usr/bin" });
+		const local = join(box.home, ".local", "bin");
+
+		const reachable = commandStatus({ home: box.home, envPath: "/usr/bin", loginDirs: [local, "/usr/bin"] });
+		assert.equal(reachable.onLoginPath, true);
+		assert.equal(reachable.loginPathKnown, true);
+
+		const unreachable = commandStatus({ home: box.home, envPath: "/usr/bin", loginDirs: ["/usr/bin"] });
+		assert.equal(unreachable.onLoginPath, false);
+		assert.equal(unreachable.loginPathKnown, true);
+		assert.equal(unreachable.pathConfigured, false, "no rc block has been written yet");
 	} finally {
 		box.cleanup();
 	}

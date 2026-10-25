@@ -38,14 +38,21 @@ cd dsh-open
 node scripts/install.mjs
 ```
 
-Then get the command itself onto PATH — either from inside the app or from a
-terminal:
+Then get the command onto PATH. **Settings → Plugins → dsh-open → Install command**
+does the whole job in one click — no terminal, no npm, no manual `export PATH`:
 
-- **From the app (no terminal, no npm):** Settings → **Plugins** → **dsh-open** →
-  **Install command**. The plugin writes a small wrapper to `~/.local/bin` (or the
-  first writable directory on its PATH) that runs the copy already installed in
-  the profile. The same page removes it again.
-- **From a terminal:** `npm link` links the checkout's bin into the global prefix.
+- it writes a small wrapper to `~/.local/bin` (or the first writable directory on
+  its PATH) that runs the copy already installed in the profile, and
+- it adds that directory to your login shell's profile — a marked
+  `# >>> dsh-open >>>` block in `~/.zshrc`, `~/.bash_profile` or
+  `~/.config/fish/config.fish`, whichever shell `$SHELL` names. Open a new
+  terminal to pick it up.
+
+**Remove command** takes both back out. A `dsh-open` the plugin did not write is
+never touched; the page says so and installs its own copy alongside.
+
+Alternative for a developer: `npm link` links the checkout's bin into the global
+prefix.
 
 `install.mjs` edits the desktop profile at `$DSH_HOME/profiles/desktop`
 (`~/.dsh` by default) in exactly four ways:
@@ -61,8 +68,8 @@ Every edited file is copied to `*.dsh-open-<stamp>.bak` first, and any failure
 restores all of them. Installing twice is a no-op.
 
 The app reads profile bundles at boot, so **quit and reopen DeepSeek Harness**
-once after installing. If the command still is not found in a new terminal, add
-`~/.local/bin` to PATH:
+once after installing. If your shell has no profile the plugin recognises, the
+settings page says so and you add the directory to PATH yourself:
 
 ```sh
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
@@ -97,8 +104,9 @@ the desktop app and `dsh web` both use it):
 
 The host half is a cordis plugin (`lib/index.js`, zero dependencies) that
 registers five exact routes on `ctx.webServer` and disposes them with its fiber:
-the three mailbox routes above, plus `GET /dsh-open/command` (status) and
-`POST /dsh-open/setup` (install/remove the command shim).
+the three mailbox routes above, plus `GET /dsh-open/command` (status, including
+whether the login shell finds the shim) and `POST /dsh-open/setup`
+(install/remove the shim and its PATH block).
 
 The browser half (`lib/client.js`, bundled from `src/client.js`) declares
 `inject: ["workspaces", "uiWorkspace"]`, so cordis hands it both services. It
@@ -115,8 +123,9 @@ deployment that does not compose that slot.
 - `POST /dsh-open/setup` is the only route that mutates anything outside the
   mailbox. It is fenced three ways: loopback connections only, a mandatory
   `x-dsh-open: setup` header (a cross-site form cannot set one), and a
-  same-origin `Origin` check. It writes exactly one file — the shim — and refuses
-  to remove a file it did not write.
+  same-origin `Origin` check. It writes at most two things — the shim and a
+  marked PATH block in one shell profile — refuses to remove a shim it did not
+  write, and only ever removes its own bounded block from the profile.
 - The plugin writes only under `$DSH_HOME/run/dsh-open` (mailbox) and, at install
   time, the four profile edits listed above. It makes no network calls.
 - `install.mjs` is a developer script. It is not run by `npm install`, and users
@@ -133,21 +142,29 @@ deployment that does not compose that slot.
 - **The browser half needs a page**: if the app window is closed but the host
   runs, requests queue until a window polls (every 750 ms) or the CLI times out
   (15 s).
+- **The PATH edit covers the common shells**: zsh, bash, fish, sh/dash/ksh get a
+  profile edit; any other `$SHELL` gets instructions on the page instead of a
+  guessed file.
 - **The settings tab appears after a restart**: the browser half arrives with the
   boot payload and talks to a route the host half registers at boot, so a fresh
   install (or an upgrade) shows the working tab only after the app restarts.
 
 ## Uninstall
 
+Settings → **Plugins** → **dsh-open** → **Remove command** deletes the shim and the
+`# >>> dsh-open >>>` PATH block it added. Then remove the plugin itself:
+
 ```sh
 npm unlink -g dsh-open
 ```
 
-Then delete the `dsh-open` entries from `$DSH_HOME/profiles/desktop/package.json`
+Delete the `dsh-open` entries from `$DSH_HOME/profiles/desktop/package.json`
 (`dependencies` and `dsh.profile.bundles`) and `cordis.patch.yml` (the `dsh-open`
 insert row), remove `node_modules/dsh-open`, and reopen the app. The
 `*.dsh-open-<stamp>.bak` copies taken at install time can also be restored
-verbatim.
+verbatim. If the page is already gone, delete the block between the two
+`# >>> dsh-open >>>` / `# <<< dsh-open <<<` markers from your shell profile by
+hand.
 
 ## Development
 
