@@ -350,7 +350,9 @@ function CommandSettingsPage() {
 }
 
 /**
- * Contribute the page to the Plugins settings section.
+ * Contribute the page to Settings: a section of its own (what a user looking
+ * for the plugin actually sees in the sidebar) and a view inside the built-in
+ * Plugins page (the convention every plugin page follows).
  *
  * `slots.inject` registers only when the deployment actually composes that
  * slot, so a bare `dsh web` without the settings UI still loads this plugin.
@@ -359,16 +361,42 @@ function CommandSettingsPage() {
 function contributeSettingsPage(ctx) {
 	// The bridge above matters more than the page: any surprise here (a client
 	// contract that moved, a service that is not reachable) leaves `dsh-open .`
-	// working and only costs the settings tab.
-	try {
-		addTab(ctx);
-	} catch {
-		// Ignored on purpose.
+	// working and only costs the settings page.
+	for (const add of [addSection, addTab]) {
+		try {
+			add(ctx);
+		} catch {
+			// Ignored on purpose.
+		}
 	}
 }
 
 /**
- * Register the tab itself.
+ * Register the page as its own settings section, next to WeChat and the market.
+ * @param ctx - client root context.
+ */
+function addSection(ctx) {
+	const slots = ctx.get("slots");
+	if (slots === undefined || slots === null || typeof slots.inject !== "function") return;
+	ctx.effect(
+		() =>
+			slots.inject("settings.section", () =>
+				slots.register(
+					{
+						name: "settings.section",
+						id: "dsh-open",
+						order: 45,
+						label: () => "dsh-open",
+					},
+					CommandSettingsPage,
+				),
+			),
+		"dsh-open: settings section",
+	);
+}
+
+/**
+ * Register the view inside the built-in Plugins section.
  * @param ctx - client root context.
  */
 function addTab(ctx) {

@@ -160,12 +160,12 @@ test("apply is a no-op beyond the bridge when no slots service exists", () => {
 	dispose();
 });
 
-test("the settings page registers into settings.plugins.tab", () => {
+test("the settings page registers as a sidebar section and a Plugins tab", () => {
 	const registered = [];
-	let injected;
+	const injected = [];
 	const slots = {
 		inject(name, callback) {
-			injected = name;
+			injected.push(name);
 			return callback();
 		},
 		register(contribution, component) {
@@ -179,11 +179,17 @@ test("the settings page registers into settings.plugins.tab", () => {
 	exportsObject.apply(ctx);
 	dispose();
 
-	assert.equal(injected, "settings.plugins.tab");
-	assert.equal(registered.length, 1);
-	assert.equal(registered[0].contribution.name, "settings.plugins.tab");
-	assert.equal(registered[0].contribution.id, "dsh-open");
-	assert.equal(registered[0].contribution.order, 40);
-	assert.equal(registered[0].contribution.label(), "dsh-open");
-	assert.equal(typeof registered[0].component, "function");
+	assert.deepEqual(injected, ["settings.section", "settings.plugins.tab"]);
+	assert.equal(registered.length, 2);
+	const [section, tab] = registered;
+	assert.equal(section.contribution.name, "settings.section");
+	assert.equal(section.contribution.id, "dsh-open");
+	assert.equal(section.contribution.order, 45);
+	assert.equal(section.contribution.label(), "dsh-open");
+	assert.equal(typeof section.component, "function");
+	assert.equal(tab.contribution.name, "settings.plugins.tab");
+	assert.equal(tab.contribution.id, "dsh-open");
+	assert.equal(tab.contribution.order, 40);
+	assert.equal(tab.contribution.label(), "dsh-open");
+	assert.equal(typeof tab.component, "function");
 });

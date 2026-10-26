@@ -38,12 +38,13 @@ cd dsh-open
 node scripts/install.mjs
 ```
 
-Then get the command onto PATH. **Settings → Plugins → dsh-open → Install command**
+Then get the command onto PATH. Open **Settings → dsh-open → Install command**
+(also reachable as a tab of **Settings → 内置插件 / Plugins**), which
 does the whole job in one click — no terminal, no npm, no manual `export PATH`:
 
 - it writes a small wrapper to `~/.local/bin` (or the first writable directory on
   its PATH) that runs the copy already installed in the profile, and
-- it adds that directory to your login shell's profile — a marked
+- and it adds that directory to your login shell's profile — a marked
   `# >>> dsh-open >>>` block in `~/.zshrc`, `~/.bash_profile` or
   `~/.config/fish/config.fish`, whichever shell `$SHELL` names. Open a new
   terminal to pick it up.
@@ -110,9 +111,11 @@ whether the login shell finds the shim) and `POST /dsh-open/setup`
 
 The browser half (`lib/client.js`, bundled from `src/client.js`) declares
 `inject: ["workspaces", "uiWorkspace"]`, so cordis hands it both services. It
-polls the mailbox and contributes the **dsh-open** tab to the Plugins settings
-section through the `settings.plugins.tab` slot contract; the tab is inert on a
-deployment that does not compose that slot.
+polls the mailbox and contributes the settings page twice: a **dsh-open** entry
+in the Settings sidebar (`settings.section`, order 45, next to WeChat and the
+market) and a tab inside the built-in Plugins section (`settings.plugins.tab`,
+order 40). Either registration is inert on a deployment that does not compose
+that slot.
 
 ## Security
 
@@ -145,13 +148,13 @@ deployment that does not compose that slot.
 - **The PATH edit covers the common shells**: zsh, bash, fish, sh/dash/ksh get a
   profile edit; any other `$SHELL` gets instructions on the page instead of a
   guessed file.
-- **The settings tab appears after a restart**: the browser half arrives with the
+- **The settings page appears after a restart**: the browser half arrives with the
   boot payload and talks to a route the host half registers at boot, so a fresh
   install (or an upgrade) shows the working tab only after the app restarts.
 
 ## Uninstall
 
-Settings → **Plugins** → **dsh-open** → **Remove command** deletes the shim and the
+**Settings → dsh-open → Remove command** deletes the shim and the
 `# >>> dsh-open >>>` PATH block it added. Then remove the plugin itself:
 
 ```sh
