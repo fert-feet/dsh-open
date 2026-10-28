@@ -1,6 +1,6 @@
 {
 	"name": "dsh-open",
-	"version": "0.3.2",
+	"version": "0.3.3",
 	"description": "Open any folder in the running DeepSeek Harness desktop app — `dsh-open .`",
 	"type": "module",
 	"main": "lib/index.js",

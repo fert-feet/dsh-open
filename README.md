@@ -120,9 +120,10 @@ that slot.
 The page itself is one card: a status pill (Ready / Not installed / Installed
 elsewhere / Unavailable), a sentence saying what to do, a details grid (command,
 install location, whether the login shell PATH carries it) and the single
-primary action plus Refresh. Copy follows the browser language (Chinese or
-English), and colours come from DSH's `--dsw-alias-*` theme tokens, so light and
-dark both work.
+primary action plus Refresh. Copy follows the app's language (the `locale`
+service's `active`, then `<html lang>`, and only then `navigator.language` —
+Electron reports en-US regardless of the app language), and colours come from
+DSH's `--dsw-alias-*` theme tokens, so light and dark both work.
 
 ## Security
 
