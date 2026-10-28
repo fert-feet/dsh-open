@@ -125,6 +125,14 @@ service's `active`, then `<html lang>`, and only then `navigator.language` —
 Electron reports en-US regardless of the app language), and colours come from
 DSH's `--dsw-alias-*` theme tokens, so light and dark both work.
 
+The sidebar entry carries this plugin's own mark — a folder with an arrow — in
+place of the shell's fallback gear. `settings.section` projects only `id`,
+`order` and `label`, so a registrant has no icon to pass; the page claims its
+own nav row once the settings dialog is mounted (matching the row by its label
+text), swaps the gear for a CSS mask of the same mark the page header draws, and
+releases both when the fiber goes away. The mark is a folder with an arrow: a
+directory, opened here.
+
 ## Security
 
 - The three routes live on the host's loopback server and **are not

@@ -193,3 +193,55 @@ test("the settings page registers as a sidebar section and a Plugins tab", () =>
 	assert.equal(tab.contribution.label(), "dsh-open");
 	assert.equal(typeof tab.component, "function");
 });
+
+test("the nav icon claims only its own settings row, then releases it", () => {
+	const MARK = "data-dsh-open-nav-icon";
+	const row = (text) => ({
+		textContent: text,
+		attributes: new Set(),
+		setAttribute(name) {
+			this.attributes.add(name);
+		},
+		removeAttribute(name) {
+			this.attributes.delete(name);
+		},
+	});
+	const rows = [row("插件列表"), row("dsh-open"), row("bili 设置")];
+	const styles = [];
+	const document = {
+		head: { appendChild: (element) => styles.push(element) },
+		body: {},
+		createElement: () => ({ dataset: {}, textContent: "", remove() {} }),
+		querySelector: (selector) => (selector === '[role="dialog"]' ? {} : null),
+		querySelectorAll: (selector) =>
+			selector === '[role="dialog"] nav button' ? rows : rows.filter((candidate) => candidate.attributes.has(MARK)),
+	};
+	const { ctx, dispose } = fakeContext([], []);
+	const { fetch, setInterval, clearInterval } = fakeNet({ path: null }, []);
+	const { exportsObject } = loadBundle({
+		fetch,
+		setInterval,
+		clearInterval,
+		setTimeout,
+		document,
+		queueMicrotask,
+		MutationObserver: class {
+			observe() {}
+			disconnect() {}
+		},
+	});
+	// The registration loop runs all three contributions; the nav icon is last,
+	// so its cleanup is the one fakeContext keeps.
+	assert.equal(typeof ctx.get("slots"), "undefined");
+	exportsObject.apply(ctx);
+
+	assert.deepEqual(
+		rows.map((candidate) => candidate.attributes.has(MARK)),
+		[false, true, false],
+	);
+	assert.match(styles[0].textContent, /mask-image/);
+	assert.equal(styles[0].dataset.plugin, "dsh-open");
+
+	dispose();
+	assert.equal(rows[1].attributes.has(MARK), false);
+});
