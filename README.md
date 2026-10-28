@@ -117,6 +117,13 @@ market) and a tab inside the built-in Plugins section (`settings.plugins.tab`,
 order 40). Either registration is inert on a deployment that does not compose
 that slot.
 
+The page itself is one card: a status pill (Ready / Not installed / Installed
+elsewhere / Unavailable), a sentence saying what to do, a details grid (command,
+install location, whether the login shell PATH carries it) and the single
+primary action plus Refresh. Copy follows the browser language (Chinese or
+English), and colours come from DSH's `--dsw-alias-*` theme tokens, so light and
+dark both work.
+
 ## Security
 
 - The three routes live on the host's loopback server and **are not
